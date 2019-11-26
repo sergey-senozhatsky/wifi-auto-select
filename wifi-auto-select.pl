@@ -91,13 +91,15 @@ sub wait_for_packets($)
 {
 	my $if = shift;
 	my $cnt = 0;
-
 	my $rx = `ifconfig $if`;
+
 	__exec("killall dhclient; echo");
+
 	while ($rx =~ m/RX packets 0/ && $cnt < 5) {
 		sleep(2);
 		$cnt++;
 		print "Waiting for packets\n";
+		$rx = `ifconfig $if`;
 	}
 
 	if ($cnt < 5) {
