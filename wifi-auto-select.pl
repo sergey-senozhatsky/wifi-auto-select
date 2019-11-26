@@ -93,12 +93,18 @@ sub wait_for_packets($)
 	my $cnt = 0;
 
 	my $rx = `ifconfig $if`;
+	__exec("killall dhclient; echo");
 	while ($rx =~ m/RX packets 0/ && $cnt < 5) {
-		sleep(1);
+		sleep(2);
 		$cnt++;
-		print "Waiting for packets";
+		print "Waiting for packets\n";
 	}
-	return $cnt < 5;
+
+	if ($cnt < 5) {
+		__exec("dhclient $if");
+		return 1;
+	}
+	return 0;
 }
 
 sub try_channels($$)
