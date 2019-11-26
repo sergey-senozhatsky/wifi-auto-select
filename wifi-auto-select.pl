@@ -8,13 +8,20 @@ use strict;
 my $scan_file = "/tmp/scan-log";
 my %channels;
 
-sub __exec($)
+sub __my_exec($)
 {
 	my $c = shift;
 
 	print "Run $c\n";
 	`$c`;
-	die("ERROR") if ($? != 0);
+	return $?;
+}
+
+sub my_exec($)
+{
+	my $c = shift;
+	my $r = __my_exec($c);
+	die("ERROR") if ($r != 0);
 }
 
 sub parse_cell($$)
@@ -23,7 +30,7 @@ sub parse_cell($$)
 	my $es = shift;
 
 	my $current_cell = 1;
-	my $channel;
+	my $channel = undef;
 	my $signal;
 	my $ok = 0;
 
@@ -34,8 +41,13 @@ sub parse_cell($$)
 		$line =~ s/^\s+//;
 
 		if ($line =~ m/Cell /) {
-			last if ($current_cell != 1);
-			$current_cell = 0;
+			if (defined $channel && $ok) {
+				print "Channel: $channel, Q: $signal for $es\n";
+
+				$ok = 0;
+				$channels{$channel} = $signal;
+				$channel = undef;
+			}
 			next;
 		}
 
@@ -55,8 +67,8 @@ sub parse_cell($$)
 		}
 	}
 
-	if ($ok) {
-		print "Found channel $channel, Q: $signal for $es\n";
+	if (defined $channel && $ok) {
+		print "Channel: $channel, Q: $signal for $es\n";
 		$channels{$channel} = $signal;
 	}
 }
@@ -68,45 +80,28 @@ sub generate_channels_map($$)
 
 	print "Scanning for $es\n";
 
-	__exec("ip link set $if up");
-	__exec("iwlist $if scan > $scan_file");
+	my_exec("ip link set $if up");
+	my_exec("iwlist $if scan > $scan_file");
 
 	my $fh = open(my $fh, "<", $scan_file) or die("ERROR");
 
-	while (my $rln = <$fh>) {
-		chomp $rln;
-
-		my $line = $rln;
-
-		if ($line =~ m/Cell /) {
-			parse_cell($fh, $es);
-			next;
-		}
-	}
-
+	parse_cell($fh, $es);
 	unlink("/tmp/scan-log");
 }
 
-sub wait_for_packets($)
+sub dhcp($)
 {
 	my $if = shift;
 	my $cnt = 0;
-	my $rx = `ifconfig $if`;
+	my $r;
 
-	__exec("killall dhclient; echo");
+	my_exec("killall dhclient; echo");
+	$r = __my_exec("dhclient $if");
+	return 0 if ($r != 0);
 
-	while ($rx =~ m/RX packets 0/ && $cnt < 5) {
-		sleep(2);
-		$cnt++;
-		print "Waiting for packets\n";
-		$rx = `ifconfig $if`;
-	}
-
-	if ($cnt < 5) {
-		__exec("dhclient $if");
-		return 1;
-	}
-	return 0;
+	$r = __my_exec("ping 8.8.8.8");
+	return 0 if ($r != 0);
+	return 1;
 }
 
 sub try_channels($$)
@@ -118,11 +113,11 @@ sub try_channels($$)
 	chomp $if;
 
 	foreach my $c (sort { $channels{$b} <=> $channels{$a} } keys %channels) {
-		__exec("ip link set $if down");
-		__exec("ip link set $if up");
+		my_exec("ip link set $if down");
+		my_exec("ip link set $if up");
 
-		__exec("iwconfig $if essid $es channel $c");
-		return 0 if (wait_for_packets($if));
+		my_exec("iwconfig $if essid $es mode managed channel $c");
+		return 0 if (dhcp($if));
 	}
 	return -1;
 }
