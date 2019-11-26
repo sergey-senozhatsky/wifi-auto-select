@@ -115,7 +115,7 @@ sub try_channels($$)
 	chomp $es;
 	chomp $if;
 
-	while (my ($c,$q) = each (%channels)) {
+	foreach my $c (sort { $channels{$b} <=> $channels{$a} } keys %channels) {
 		__exec("ip link set $if down");
 		__exec("ip link set $if up");
 
