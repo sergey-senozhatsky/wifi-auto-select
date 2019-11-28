@@ -80,6 +80,7 @@ sub generate_channels_map($$)
 
 	print "Scanning for $es\n";
 
+	__my_exec("ip link set $if down");
 	my_exec("ip link set $if up");
 	my_exec("iwlist $if scan > $scan_file");
 
@@ -95,13 +96,17 @@ sub dhcp($)
 	my $cnt = 0;
 	my $r;
 
-	my_exec("killall dhclient; echo");
-	$r = __my_exec("dhclient $if");
-	return 0 if ($r != 0);
+	__my_exec("rm /var/lib/dhclient/dhclient.leases");
 
-	$r = __my_exec("ping 8.8.8.8");
-	return 0 if ($r != 0);
-	return 1;
+	while ($cnt < 3) {
+		__my_exec("killall dhclient");
+		$r = __my_exec("dhclient $if");
+		return 1 if ($r == 0);
+		$cnt++;
+		my_exec("dhclient -r -v $if");
+		sleep(3);
+	}
+	return 0;
 }
 
 sub try_channels($$)
