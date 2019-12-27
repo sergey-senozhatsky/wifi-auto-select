@@ -125,7 +125,10 @@ sub try_channels($$$)
 
 		my_exec("iwconfig $if essid $es mode managed channel $c");
 		my_exec("wpa_supplicant -B -D wext -i wlp2s0 -c $cf") if (defined $cf);
-		return 0 if (dhcp($if));
+		if (dhcp($if)) {
+			my_exec("ntpdate asia.pool.ntp.org");
+			return 0;
+		}
 	}
 	return -1;
 }
