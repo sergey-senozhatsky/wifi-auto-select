@@ -109,19 +109,22 @@ sub dhcp($)
 	return 0;
 }
 
-sub try_channels($$)
+sub try_channels($$$)
 {
 	my $if = shift;
 	my $es = shift;
+	my $cf = shift;
 
 	chomp $es;
 	chomp $if;
+	chomp $cf if (defined $cf);
 
 	foreach my $c (sort { $channels{$b} <=> $channels{$a} } keys %channels) {
 		my_exec("ip link set $if down");
 		my_exec("ip link set $if up");
 
 		my_exec("iwconfig $if essid $es mode managed channel $c");
+		my_exec("wpa_supplicant -B -D wext -i wlp2s0 -c $cf") if (defined $cf);
 		return 0 if (dhcp($if));
 	}
 	return -1;
@@ -131,11 +134,12 @@ sub main()
 {
 	my $ifname = $ARGV[0];
 	my $essid = $ARGV[1];
+	my $config = $ARGV[2];
 
 	print "$ifname $essid\n";
 
 	generate_channels_map($ifname, $essid);
-	return try_channels($ifname, $essid);
+	return try_channels($ifname, $essid, $config);
 }
 
 main();
